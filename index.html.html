@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ha">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wasan Ƙwallo</title>
+<style>
+:root{--bg:#f3f5f2;--fg:#14211a;--card:#ffffff;--acc:#1b8a4b;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101712;--fg:#e8f0ea;--card:#1b261e;--acc:#3ccf7a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#101712;--fg:#e8f0ea;--card:#1b261e;--acc:#3ccf7a;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:10px;touch-action:none;user-select:none}
+#hud{display:flex;gap:16px;align-items:center;font-weight:700;font-size:20px}
+#hud span.s{background:var(--card);padding:4px 14px;border-radius:10px;min-width:44px;text-align:center}
+#hud .t{font-variant-numeric:tabular-nums;color:var(--acc)}
+#wrap{position:relative;width:100%;max-width:820px}
+canvas{width:100%;height:auto;display:block;border-radius:12px;background:#2e8b4a}
+#ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,.6);border-radius:12px;color:#fff;text-align:center;padding:16px}
+#ov h1{margin:0;font-size:28px}
+#ov p{margin:0;opacity:.9;font-size:14px}
+button{font:inherit;font-weight:700;background:var(--acc);color:#fff;border:0;border-radius:12px;padding:12px 26px;font-size:18px;cursor:pointer}
+#ctl{display:none;width:100%;max-width:820px;justify-content:space-between;align-items:center;padding:0 8px}
+@media (pointer:coarse){#ctl{display:flex}}
+#joy{width:130px;height:130px;border-radius:50%;background:var(--card);position:relative;border:2px solid var(--acc)}
+#knob{width:56px;height:56px;border-radius:50%;background:var(--acc);position:absolute;left:37px;top:37px}
+#kick{width:96px;height:96px;border-radius:50%;font-size:17px;padding:0}
+</style>
+</head>
+<body>
+<div id="hud"><span>Kai</span><span class="s" id="sa">0</span><span class="t" id="tm">1:30</span><span class="s" id="sb">0</span><span>Abokin gaba</span></div>
+<div id="wrap">
+<canvas id="c" width="800" height="500"></canvas>
+<div id="ov"><h1 id="ot">⚽ Wasan Ƙwallo</h1><p id="op">Kibiyoyi ko WASD don gudu · Space don harba</p><button id="go">Fara Wasa</button></div>
+</div>
+<div id="ctl"><div id="joy"><div id="knob"></div></div><button id="kick">Harba</button></div>
+<script>
+const cv=document.getElementById('c'),g=cv.getContext('2d');
+const W=800,H=500,GY1=190,GY2=310,R=14,BR=8;
+let P,ball,sa,sb,time,run=false,pause=0;
+const keys={},joy={x:0,y:0};let kickReq=false;
+function reset(kick){
+  ball={x:W/2,y:H/2,vx:0,vy:0};
+  P=[
+    {t:0,x:180,y:170,hx:200,hy:170,vx:0,vy:0},
+    {t:0,x:180,y:330,hx:130,hy:330,vx:0,vy:0},
+    {t:1,x:620,y:170,hx:600,hy:170,vx:0,vy:0},
+    {t:1,x:620,y:330,hx:670,hy:330,vx:0,vy:0}
+  ];
+}
+function start(){sa=sb=0;time=90;reset();run=true;document.getElementById('ov').style.display='none';upd();}
+function upd(){document.getElementById('sa').textContent=sa;document.getElementById('sb').textContent=sb;
+  const m=Math.max(0,Math.ceil(time));document.getElementById('tm').textContent=Math.floor(m/60)+':'+String(m%60).padStart(2,'0');}
+function kickBall(p,dx,dy,pw){
+  const l=Math.hypot(dx,dy)||1;ball.vx=dx/l*pw;ball.vy=dy/l*pw;
+}
+function step(){
+  if(pause>0){pause--;if(pause==0)reset();return;}
+  time-=1/60;
+  if(time<=0){time=0;end();return;}
+  // human = nearest blue to ball
+  let h=P[0],hd=1e9;for(const p of P)if(p.t==0){const d=Math.hypot(p.x-ball.x,p.y-ball.y);if(d<hd){hd=d;h=p;}}
+  for(const p of P){
+    let ax=0,ay=0,sp=2.7;
+    if(p===h){
+      ax=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0)+joy.x;
+      ay=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0)+joy.y;
+      const l=Math.hypot(ax,ay);if(l>1){ax/=l;ay/=l;}
+      if(kickReq&&Math.hypot(p.x-ball.x,p.y-ball.y)<R+BR+10){kickBall(p,GX(p)-ball.x,H/2-ball.y+(ax||ay?ay*80:0),10.5);}
+    }else{
+      const mates=P.filter(q=>q.t==p.t);
+      const closest=mates.reduce((a,b)=>Math.hypot(a.x-ball.x,a.y-ball.y)<Math.hypot(b.x-ball.x,b.y-ball.y)?a:b);
+      let tx=p.hx+(ball.x-W/2)*0.25,ty=p.hy+(ball.y-H/2)*0.2;
+      if(closest===p&&!(p.t==0&&p===h)){tx=ball.x;ty=ball.y;sp=p.t?2.35:2.5;}
+      const dx=tx-p.x,dy=ty-p.y,l=Math.hypot(dx,dy);
+      if(l>4){ax=dx/l;ay=dy/l;}
+      if(closest===p&&Math.hypot(p.x-ball.x,p.y-ball.y)<R+BR+6&&Math.random()<0.05)
+        kickBall(p,GX(p)-ball.x,H/2-ball.y+(Math.random()-.5)*110,9);
+    }
+    p.vx=ax*sp;p.vy=ay*sp;p.x+=p.vx;p.y+=p.vy;
+    p.x=Math.max(R,Math.min(W-R,p.x));p.y=Math.max(R,Math.min(H-R,p.y));
+    // dribble / push ball
+    const dx=ball.x-p.x,dy=ball.y-p.y,d=Math.hypot(dx,dy),m=R+BR;
+    if(d<m&&d>0){ball.x=p.x+dx/d*m;ball.y=p.y+dy/d*m;ball.vx+=p.vx*0.6+dx/d*0.8;ball.vy+=p.vy*0.6+dy/d*0.8;}
+  }
+  kickReq=false;
+  // ball physics
+  ball.x+=ball.vx;ball.y+=ball.vy;ball.vx*=0.985;ball.vy*=0.985;
+  const sp=Math.hypot(ball.vx,ball.vy);if(sp>13){ball.vx*=13/sp;ball.vy*=13/sp;}
+  if(ball.y<BR){ball.y=BR;ball.vy*=-0.8;}
+  if(ball.y>H-BR){ball.y=H-BR;ball.vy*=-0.8;}
+  const inG=ball.y>GY1&&ball.y<GY2;
+  if(ball.x<BR){ if(inG&&ball.x<-4){sb++;goal();} else if(!inG){ball.x=BR;ball.vx*=-0.8;} }
+  if(ball.x>W-BR){ if(inG&&ball.x>W+4){sa++;goal();} else if(!inG){ball.x=W-BR;ball.vx*=-0.8;} }
+  upd();
+}
+function GX(p){return p.t==0?W:0;}
+function goal(){pause=90;flash=60;upd();}
+let flash=0;
+function end(){
+  run=false;const ov=document.getElementById('ov');ov.style.display='flex';
+  document.getElementById('ot').textContent=sa>sb?'🏆 Ka ci nasara!':sa<sb?'Ka sha kashi':'Canjaras';
+  document.getElementById('op').textContent='Sakamako: '+sa+' - '+sb;
+  document.getElementById('go').textContent='Sake wasa';
+}
+function draw(){
+  g.fillStyle='#2e8b4a';g.fillRect(0,0,W,H);
+  for(let i=0;i<8;i+=2){g.fillStyle='rgba(255,255,255,.04)';g.fillRect(i*100,0,100,H);}
+  g.strokeStyle='rgba(255,255,255,.85)';g.lineWidth=3;
+  g.strokeRect(3,3,W-6,H-6);g.beginPath();g.moveTo(W/2,3);g.lineTo(W/2,H-3);g.stroke();
+  g.beginPath();g.arc(W/2,H/2,55,0,7);g.stroke();
+  g.strokeRect(3,140,90,220);g.strokeRect(W-93,140,90,220);
+  g.fillStyle='rgba(255,255,255,.25)';g.fillRect(-0,GY1,6,GY2-GY1);g.fillRect(W-6,GY1,6,GY2-GY1);
+  g.fillStyle='#fff';g.fillRect(0,GY1-3,10,3);g.fillRect(0,GY2,10,3);g.fillRect(W-10,GY1-3,10,3);g.fillRect(W-10,GY2,10,3);
+  let h=null,hd=1e9;for(const p of P)if(p.t==0){const d=Math.hypot(p.x-ball.x,p.y-ball.y);if(d<hd){hd=d;h=p;}}
+  for(const p of P){
+    g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(p.x,p.y+R-2,R,5,0,0,7);g.fill();
+    g.fillStyle=p.t?'#d93a3a':'#2f6fe0';g.beginPath();g.arc(p.x,p.y,R,0,7);g.fill();
+    g.strokeStyle='#fff';g.lineWidth=2;g.stroke();
+    if(p===h&&run){g.strokeStyle='#ffe14d';g.lineWidth=3;g.beginPath();g.arc(p.x,p.y,R+6,0,7);g.stroke();}
+  }
+  g.fillStyle='#000';g.beginPath();g.arc(ball.x+2,ball.y+3,BR,0,7);g.globalAlpha=.25;g.fill();g.globalAlpha=1;
+  g.fillStyle='#fff';g.beginPath();g.arc(ball.x,ball.y,BR,0,7);g.fill();
+  g.fillStyle='#222';g.beginPath();g.arc(ball.x,ball.y,3,0,7);g.fill();
+  if(pause>0){g.fillStyle='rgba(0,0,0,.45)';g.fillRect(0,H/2-45,W,90);g.fillStyle='#fff';g.font='bold 56px system-ui';g.textAlign='center';g.fillText('GOOOL! ⚽',W/2,H/2+20);}
+}
+function loop(){if(run)step();draw();requestAnimationFrame(loop);}
+reset();sa=sb=0;loop();
+document.getElementById('go').onclick=start;
+addEventListener('keydown',e=>{const k=e.key.length==1?e.key.toLowerCase():e.key;keys[k]=true;if(k==' '){kickReq=true;e.preventDefault();}if(k.startsWith('Arrow'))e.preventDefault();});
+addEventListener('keyup',e=>{const k=e.key.length==1?e.key.toLowerCase():e.key;keys[k]=false;});
+// touch
+const jy=document.getElementById('joy'),kn=document.getElementById('knob');
+function jm(e){const r=jy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+  let dx=(e.clientX-cx)/(r.width/2),dy=(e.clientY-cy)/(r.height/2);const l=Math.hypot(dx,dy);if(l>1){dx/=l;dy/=l;}
+  joy.x=dx;joy.y=dy;kn.style.left=(37+dx*37)+'px';kn.style.top=(37+dy*37)+'px';}
+jy.addEventListener('pointerdown',e=>{jy.setPointerCapture(e.pointerId);jm(e);});
+jy.addEventListener('pointermove',e=>{if(e.buttons||e.pressure)jm(e);});
+const je=()=>{joy.x=joy.y=0;kn.style.left=kn.style.top='37px';};
+jy.addEventListener('pointerup',je);jy.addEventListener('pointercancel',je);
+document.getElementById('kick').addEventListener('pointerdown',e=>{e.preventDefault();kickReq=true;});
+</script>
+</body>
+</html>
